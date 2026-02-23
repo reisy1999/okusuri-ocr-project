@@ -1,0 +1,27 @@
+services:
+  # OCR API (Python/FastAPI + GPU)
+  ocr-api:
+    build: ./ocr-api
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ./ocr-api/models:/app/models
+    environment:
+      - YOMITOKU_CACHE_DIR=/app/models
+
+  # Backend API (Node.js/Hono)
+  ocr-backend:
+    build: ./ocr-backend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - ocr-api
+    environment:
+      - OCR_API_URL=http://ocr-api:8000
