@@ -1,0 +1,4 @@
+paddleocr[doc-parser]
+safetensors
+gradio>=5.0,<6.0
+pillow
