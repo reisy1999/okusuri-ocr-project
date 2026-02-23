@@ -1,13 +1,13 @@
-import torch
+import paddle
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from app.ocr_service import ocr_service
 from app.schemas import HealthResponse, OCRResponse
 
 app = FastAPI(
-    title="YomiToku OCR API",
-    description="日本語ドキュメント画像解析API",
-    version="0.1.0",
+    title="PaddleOCR API",
+    description="日本語ドキュメント画像解析API (PP-OCRv5)",
+    version="0.2.0",
 )
 
 
@@ -16,7 +16,7 @@ def health_check():
     """ヘルスチェック"""
     return HealthResponse(
         status="ok",
-        gpu_available=torch.cuda.is_available(),
+        gpu_available=paddle.device.is_compiled_with_cuda(),
     )
 
 

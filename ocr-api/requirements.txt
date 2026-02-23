@@ -4,7 +4,8 @@ uvicorn[standard]>=0.27.0
 python-multipart>=0.0.9
 
 # OCR
-yomitoku>=0.11.0
+paddlepaddle-gpu  # PaddlePaddle GPU版 (CUDA 11.8/12.x)
+paddleocr         # PaddleOCR (PP-OCRv5)
 
 # Image processing
 pillow>=10.0.0

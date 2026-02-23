@@ -14,7 +14,7 @@ services:
     volumes:
       - ./ocr-api/models:/app/models
     environment:
-      - YOMITOKU_CACHE_DIR=/app/models
+      - PADDLEOCR_CACHE_DIR=/app/models
 
   # Backend API (Node.js/Hono)
   ocr-backend:

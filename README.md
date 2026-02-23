@@ -2,15 +2,15 @@
 
 お薬手帳の画像から薬品名を OCR で読み取り、厚労省の薬価基準データベースとファジーマッチングで照合するシステム。
 
-OCR エンジンには日本語文書画像解析に特化した [YomiToku](https://github.com/kotaro-kinoshita/yomitoku) を使用しています。
+OCR エンジンには [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) の PP-OCRv5 を使用しています。PP-OCRv5 は日本語を含む106言語以上をサポートし、高精度な文字認識を提供します。
 
 ## アーキテクチャ
 
 ```
 画像 → [ocr-api] → OCR結果(テキスト) → [ocr-backend] → ファジーマッチング → 薬品名候補
-                     YomiToku                               ↑
-                                                    [okusuriDB] で構築した
-                                                     薬価基準 SQLite DB
+                     PaddleOCR PP-OCRv5                    ↑
+                                                   [okusuriDB] で構築した
+                                                    薬価基準 SQLite DB
 ```
 
 ## 構成
@@ -18,14 +18,14 @@ OCR エンジンには日本語文書画像解析に特化した [YomiToku](http
 ```
 okusuri-ocr-project/
 ├── docker-compose.yml     # 全サービスのオーケストレーション
-├── ocr-api/               # OCR API（Python / FastAPI / YomiToku）
+├── ocr-api/               # OCR API（Python / FastAPI / PaddleOCR）
 ├── ocr-backend/           # バックエンド API（Node.js / Hono）
 └── okusuriDB/             # 薬価DB構築ツール（Node.js / xlsx → SQLite）
 ```
 
 | サービス | 技術スタック | ポート | 役割 |
 |---|---|---|---|
-| ocr-api | Python, FastAPI, YomiToku | 8000 | 画像から日本語テキストを抽出 |
+| ocr-api | Python, FastAPI, PaddleOCR (PP-OCRv5) | 8000 | 画像から日本語テキストを抽出 |
 | ocr-backend | Node.js, Hono, better-sqlite3 | 3000 | OCR結果を薬価DBとファジーマッチング |
 | okusuriDB | Node.js, xlsx, better-sqlite3 | - (CLI) | 厚労省 xlsx → SQLite DB 構築 |
 
@@ -43,7 +43,7 @@ okusuri-ocr-project/
 docker compose up --build
 ```
 
-初回起動時に YomiToku のモデル（約 1GB）が Hugging Face から自動ダウンロードされ、`ocr-api/models/` にキャッシュされます。
+初回起動時に PaddleOCR のモデルが自動ダウンロードされ、`ocr-api/models/` にキャッシュされます。
 
 ### 個別起動
 
@@ -90,4 +90,4 @@ curl -X POST http://localhost:3000/fuzzy-match \
 
 ## ライセンス
 
-本プロジェクトが依存する [YomiToku](https://github.com/kotaro-kinoshita/yomitoku) は **CC BY-NC-SA 4.0** ライセンスです。商用利用には YomiToku の別途ライセンスが必要です。
+本プロジェクトが依存する [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) は **Apache License 2.0** ライセンスです。

@@ -1,5 +1,5 @@
-# CUDA 12.4 + Python 3.11 ベースイメージ
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+# PaddlePaddle GPU ベースイメージ (CUDA 11.8)
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -16,9 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # アプリケーションコード
 COPY app/ ./app/
 
-# モデルキャッシュパス（環境変数で上書き可能）
-# 本番環境ではボリュームマウントしたパスを指定
-ENV YOMITOKU_CACHE_DIR=/app/models
+# モデルキャッシュパス
+ENV PADDLEOCR_CACHE_DIR=/app/models
 
 # ポート
 EXPOSE 8000
