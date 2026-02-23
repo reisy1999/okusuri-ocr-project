@@ -1,6 +1,5 @@
 """PaddleOCR PP-OCRv5 / PaddleOCR-VL-1.5 性能検証 GUI"""
 
-import json as json_mod
 import os
 import tempfile
 import time
@@ -37,23 +36,6 @@ def get_ocr_vl():
     return _ocr_vl
 
 
-# --- 描画ユーティリティ ---
-def draw_bboxes(image: Image.Image, result: list) -> Image.Image:
-    draw = ImageDraw.Draw(image)
-    try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
-    except (OSError, IOError):
-        font = ImageFont.load_default()
-    for item in result:
-        bbox = item["bbox"]
-        points = [(int(p[0]), int(p[1])) for p in bbox]
-        for i in range(4):
-            draw.line([points[i], points[(i + 1) % 4]], fill="red", width=2)
-        label = f"{item['rec_score']:.2f}"
-        draw.text((points[0][0], points[0][1] - 16), label, fill="red", font=font)
-    return image
-
-
 # --- PP-OCRv5 ---
 def run_ocr_v5(input_path: str | None):
     if input_path is None:
@@ -79,8 +61,17 @@ def run_ocr_v5(input_path: str | None):
         parsed.append({"bbox": poly, "text": text, "rec_score": r_score})
         det_str = f"{d_score:.4f}" if d_score is not None else "-"
         rows.append([text, f"{r_score:.4f}", det_str])
-    annotated = draw_bboxes(Image.fromarray(input_image), parsed)
-    return annotated, rows, f"処理時間: {elapsed:.2f}s | {len(rows)} テキスト検出"
+    draw = ImageDraw.Draw(pil_img := Image.fromarray(input_image))
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
+    except (OSError, IOError):
+        font = ImageFont.load_default()
+    for item in parsed:
+        points = [(int(p[0]), int(p[1])) for p in item["bbox"]]
+        for i in range(4):
+            draw.line([points[i], points[(i + 1) % 4]], fill="red", width=2)
+        draw.text((points[0][0], points[0][1] - 16), f"{item['rec_score']:.2f}", fill="red", font=font)
+    return pil_img, rows, f"処理時間: {elapsed:.2f}s | {len(rows)} テキスト検出"
 
 
 # --- PaddleOCR-VL-1.5 ---
@@ -92,11 +83,7 @@ def run_ocr_vl(input_path: str | None):
     engine = get_ocr_vl()
 
     start = time.time()
-    results = list(engine.predict(
-        input_path,
-        use_layout_detection=False,
-        prompt_label="ocr",
-    ))
+    results = list(engine.predict(input_path, format_block_content=True))
     elapsed = time.time() - start
     print(f"[VL] Done in {elapsed:.2f}s, {len(results)} result(s)")
 
@@ -105,56 +92,35 @@ def run_ocr_vl(input_path: str | None):
 
     res = results[0]
 
-    # --- 可視化画像 ---
+    # --- 可視化画像: res.img["layout_det_res"] ---
     vis_img = None
     try:
-        save_dir = tempfile.mkdtemp(prefix="vl_vis_")
-        res.save_to_img(save_dir)
-        saved_files = [f for f in os.listdir(save_dir) if f.endswith((".png", ".jpg"))]
-        if saved_files:
-            vis_img = Image.open(os.path.join(save_dir, saved_files[0]))
+        img_dict = res.img
+        if isinstance(img_dict, dict):
+            vis_img = img_dict.get("layout_det_res") or img_dict.get("overall_ocr_res")
     except Exception as e:
-        print(f"[VL] save_to_img failed: {e}")
-    if vis_img is None and hasattr(res, "img") and res.img:
-        img_data = res.img
-        if hasattr(img_data, "keys"):
-            for key in img_data:
-                if isinstance(img_data[key], Image.Image):
-                    vis_img = img_data[key]
-                    break
+        print(f"[VL] res.img failed: {e}")
 
-    # --- プレーンテキスト出力 ---
-    output_text = ""
+    # --- parsing_res_list から座標付きテキスト ---
+    json_data = res.json
+    blocks = json_data.get("parsing_res_list", [])
 
-    # parsing_res_list の block_content を結合
-    try:
-        j = res.json
-        if isinstance(j, dict) and "parsing_res_list" in j:
-            texts = [b["block_content"] for b in j["parsing_res_list"] if b.get("block_content")]
-            output_text = "\n".join(texts)
-            print(f"[VL] blocks: {len(texts)}")
-    except Exception as e:
-        print(f"[VL] json parse failed: {e}")
+    lines = []
+    for b in blocks:
+        label = b.get("block_label", "")
+        content = b.get("block_content", "").strip()
+        bbox = b.get("block_bbox", [])
+        order = b.get("block_order", "")
 
-    # fallback: .markdown
-    if not output_text:
-        try:
-            md = res.markdown
-            if isinstance(md, dict):
-                t = md.get("markdown_texts", "")
-                output_text = "\n".join(t) if isinstance(t, list) else str(t)
-            elif isinstance(md, str):
-                output_text = md
-        except Exception:
-            pass
+        if not content:
+            continue
 
-    # 最終 fallback
-    if not output_text:
-        output_text = str(res)
+        bbox_str = f"[{int(bbox[0])},{int(bbox[1])},{int(bbox[2])},{int(bbox[3])}]" if len(bbox) >= 4 else "[-]"
+        lines.append(f"{bbox_str} ({label}) {content}")
 
-    status = f"処理時間: {elapsed:.2f}s"
-    print(f"[VL] output length: {len(output_text)}")
-    print(f"[VL] output:\n{output_text[:500]}")
+    output_text = "\n".join(lines) if lines else "(検出なし)"
+    status = f"処理時間: {elapsed:.2f}s | ブロック数: {len(blocks)}"
+    print(f"[VL] {status}")
 
     return vis_img, output_text, status
 
@@ -165,14 +131,13 @@ with gr.Blocks(title="PaddleOCR 検証") as demo:
     gr.Markdown(f"GPU: **{'有効' if use_gpu else '無効 (CPU)'}**")
 
     with gr.Tab("PaddleOCR-VL-1.5"):
-        gr.Markdown("Vision-Language モデル — プレーンテキスト出力")
+        gr.Markdown("Vision-Language モデル — 座標付きテキスト出力")
         with gr.Row():
             vl_input = gr.Image(label="入力画像", type="filepath")
         vl_btn = gr.Button("OCR 実行 (VL-1.5)", variant="primary")
         vl_status = gr.Textbox(label="ステータス", lines=1)
-        with gr.Row():
-            vl_output_img = gr.Image(label="可視化結果", type="pil")
-            vl_output_text = gr.Textbox(label="認識結果（プレーンテキスト）", lines=25, show_copy_button=True)
+        vl_output_img = gr.Image(label="レイアウト検出結果", type="pil")
+        vl_output_text = gr.Textbox(label="認識結果 [x1,y1,x2,y2] (label) text", lines=25, show_copy_button=True)
         vl_btn.click(
             fn=run_ocr_vl,
             inputs=[vl_input],
