@@ -8,8 +8,12 @@ __pycache__/
 .venv/
 venv/
 
-# OCR models (large files)
-ocr-api/models/
+# OCR models (large binary files)
+*.onnx
+
+# Deploy (offline/production environment only)
+deploy/
+*.tar.gz
 
 # Database files
 *.db

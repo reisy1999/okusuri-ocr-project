@@ -1,26 +1,39 @@
-# PaddlePaddle GPU ベースイメージ (CUDA 11.8)
-FROM python:3.11-slim
+# ============================================================
+# Japanese OCR API — ndlocr-lite edition (single-stage)
+#
+# Build (GPU不要):
+#   docker build -t japanese-ocr-api .
+#
+# Run (GPUサーバーで):
+#   docker run --gpus all -p 8000:8000 japanese-ocr-api
+#
+# Run (CPUのみ):
+#   docker run -p 8000:8000 japanese-ocr-api
+# ============================================================
+FROM python:3.10-slim
 
 WORKDIR /app
 
-# システム依存パッケージ
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+# ---- ndlocr-lite dependencies + API dependencies ----
+RUN pip install --no-cache-dir \
+    onnxruntime-gpu==1.23.2 \
+    lxml==5.2.2 \
+    networkx==3.3 \
+    pillow==12.1.1 \
+    PyYAML==6.0.1 \
+    numpy==2.2.2 \
+    tqdm==4.66.4 \
+    ordered-set==4.1.0 \
+    fastapi \
+    "uvicorn[standard]" \
+    python-multipart \
+    httpx
 
-# Pythonパッケージインストール
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# ---- Application code ----
+COPY ndlocr-lite/src/ /app/ndlocr-lite/src/
+COPY app/ /app/app/
+COPY run.py /app/run.py
 
-# アプリケーションコード
-COPY app/ ./app/
-
-# モデルキャッシュパス
-ENV PADDLEOCR_CACHE_DIR=/app/models
-
-# ポート
 EXPOSE 8000
 
-# 起動コマンド
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "run.py"]

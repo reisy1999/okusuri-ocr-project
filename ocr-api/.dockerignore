@@ -1,0 +1,36 @@
+.git
+.github
+.vscode
+__pycache__
+*.pyc
+*.egg-info
+dist
+build
+docs
+tests
+*.md
+!requirements*.txt
+
+# ndlocr-lite non-essential files
+ndlocr-lite/.git
+ndlocr-lite/.github
+ndlocr-lite/train
+ndlocr-lite/ndlocr-lite-gui
+ndlocr-lite/dummy.dat
+ndlocr-lite/LICENCE*
+ndlocr-lite/README.md
+ndlocr-lite/requirements.txt
+ndlocr-lite/src/assets
+ndlocr-lite/src/uicomponent
+ndlocr-lite/src/tools
+
+# Old PaddleOCR files (no longer needed in build)
+paddleocr
+ppocr
+configs
+scripts
+deploy/cpp_infer
+deploy/android_demo
+setup.py
+pyproject.toml
+requirements.txt
