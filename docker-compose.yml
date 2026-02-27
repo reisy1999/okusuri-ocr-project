@@ -15,13 +15,36 @@ services:
       - ./ocr-api/models:/app/models
     environment:
       - PADDLEOCR_CACHE_DIR=/app/models
+    restart: unless-stopped
 
-  # Backend API (Node.js/Hono)
-  ocr-backend:
-    build: ./ocr-backend
+  # OCR Pipeline (Node.js/Hono — OCR + fuzzy match)
+  ocr-pipeline:
+    build: ./ocr-pipeline
     ports:
       - "3000:3000"
     depends_on:
       - ocr-api
     environment:
       - OCR_API_URL=http://ocr-api:8000
+      - OLLAMA_URL=http://host.gateway.docker.internal:11434
+    volumes:
+      - ./okusuriDB/medicines.db:/app/medicines.db:ro
+    restart: unless-stopped
+
+  # OCR GUI (React)
+  ocr-gui:
+    build: ./ocr-api/ocr-gui
+    ports:
+      - "8080:80"
+    depends_on:
+      - ocr-api
+    restart: unless-stopped
+
+  # Pipeline Debug GUI (React)
+  pipeline-gui:
+    build: ./pipeline-gui
+    ports:
+      - "5173:80"
+    depends_on:
+      - ocr-pipeline
+    restart: unless-stopped

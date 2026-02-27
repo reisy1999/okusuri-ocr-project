@@ -7,10 +7,13 @@ OCR エンジンには [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) �
 ## アーキテクチャ
 
 ```
-画像 → [ocr-api] → OCR結果(テキスト) → [ocr-backend] → ファジーマッチング → 薬品名候補
-                     PaddleOCR PP-OCRv5                    ↑
-                                                   [okusuriDB] で構築した
-                                                    薬価基準 SQLite DB
+Client → [ocr-pipeline:3000/pipeline/file]
+              ↓ (内部 fetch)
+          [ocr-api:8000/ocr/file] → OCR結果
+              ↓
+          正規化 + fuzzy match
+              ↓
+          統合レスポンス返却
 ```
 
 ## 構成
@@ -19,14 +22,15 @@ OCR エンジンには [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) �
 okusuri-ocr-project/
 ├── docker-compose.yml     # 全サービスのオーケストレーション
 ├── ocr-api/               # OCR API（Python / FastAPI / PaddleOCR）
-├── ocr-backend/           # バックエンド API（Node.js / Hono）
+├── ocr-pipeline/          # パイプライン API（Node.js / Hono）— OCR → 正規化 → ファジーマッチ
 └── okusuriDB/             # 薬価DB構築ツール（Node.js / xlsx → SQLite）
 ```
 
 | サービス | 技術スタック | ポート | 役割 |
 |---|---|---|---|
 | ocr-api | Python, FastAPI, PaddleOCR (PP-OCRv5) | 8000 | 画像から日本語テキストを抽出 |
-| ocr-backend | Node.js, Hono, better-sqlite3 | 3000 | OCR結果を薬価DBとファジーマッチング |
+| ocr-pipeline | Node.js, Hono, better-sqlite3 | 3000 | OCR → 正規化 → 薬価DBファジーマッチングのパイプライン |
+| ocr-gui | React, TypeScript | 8080 | Web UI |
 | okusuriDB | Node.js, xlsx, better-sqlite3 | - (CLI) | 厚労省 xlsx → SQLite DB 構築 |
 
 ## 必要環境
@@ -51,14 +55,65 @@ docker compose up --build
 # OCR API
 cd ocr-api && pip install -r requirements.txt && uvicorn app.main:app --port 8000
 
-# Backend
-cd ocr-backend && npm install && npm run dev
+# Pipeline
+cd ocr-pipeline && npm install && npm run dev
 
 # DB構築（初回のみ）
 cd okusuriDB && npm install && npm run import
 ```
 
 ## API
+
+### パイプライン API (`ocr-pipeline`)
+
+画像を受け取り、OCR → 正規化 → ファジーマッチングまで1リクエストで完結。
+
+```bash
+# ヘルスチェック
+curl http://localhost:3000/health
+
+# 画像ファイルからパイプライン実行
+curl -X POST http://localhost:3000/pipeline/file -F "file=@photo.jpg"
+
+# URL指定
+curl -X POST http://localhost:3000/pipeline/url \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/photo.jpg"}'
+
+# Base64指定
+curl -X POST http://localhost:3000/pipeline/base64 \
+  -H "Content-Type: application/json" \
+  -d '{"image": "<base64>"}'
+```
+
+レスポンス例:
+
+```json
+{
+  "ocr": {
+    "lines": [
+      { "text": "ロキソニン錠60mg", "confidence": 0.95, "box": [[...]], "is_vertical": false }
+    ]
+  },
+  "matches": [
+    {
+      "input": "ロキソニン錠60mg",
+      "best_match": "ロキソニン",
+      "score": 0.92,
+      "status": "modified",
+      "confidence": 0.95
+    }
+  ]
+}
+```
+
+### ファジーマッチ単体（後方互換）
+
+```bash
+curl -X POST http://localhost:3000/fuzzy-match \
+  -H "Content-Type: application/json" \
+  -d '{"drugs": ["ロキソニン錠60mg"]}'
+```
 
 ### OCR API (`ocr-api`)
 
@@ -67,16 +122,7 @@ cd okusuriDB && npm install && npm run import
 curl http://localhost:8000/health
 
 # OCR実行
-curl -X POST http://localhost:8000/ocr -F "file=@photo.jpg"
-```
-
-### Backend API (`ocr-backend`)
-
-```bash
-# ファジーマッチング
-curl -X POST http://localhost:3000/fuzzy-match \
-  -H "Content-Type: application/json" \
-  -d '{"drugs": ["ロキソニン錠60mg"]}'
+curl -X POST http://localhost:8000/ocr/file -F "file=@photo.jpg"
 ```
 
 ## データソース

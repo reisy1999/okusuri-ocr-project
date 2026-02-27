@@ -1,0 +1,21 @@
+# ==============================================================================
+# 開発環境（CPU）— ホストから直接アクセス
+# ==============================================================================
+# docker compose up -d
+# API:  http://localhost:8000
+# GUI:  http://localhost:8080
+services:
+  ocr-api:
+    image: japanese-ocr-api
+    build: .
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  ocr-gui:
+    build: ./ocr-gui
+    ports:
+      - "8080:80"
+    depends_on:
+      - ocr-api
+    restart: unless-stopped
