@@ -1,5 +1,5 @@
 import { getAllMedicines } from "./db";
-import { normalizedScore } from "./levenshtein";
+import { vwhtfragScore } from "./vwhtfrag";
 import { normalizeMedicineName } from "./normalize";
 
 export interface MatchResult {
@@ -21,27 +21,30 @@ function determineStatus(score: number): MatchResult["status"] {
 
 /**
  * 入力文字列に対して医薬品マスタから最もスコアの高い候補を返す
+ *
+ * 比較: normalizeMedicineName で剥いた文字列同士を vwhtfrag で比較
+ * 表示: DB の元の generic_name / brand_name をそのまま返す
  */
 export function findBestMatch(input: string): MatchResult {
   const medicines = getAllMedicines();
-  const { normalized, prefix, suffix } = normalizeMedicineName(input);
+  const { normalized } = normalizeMedicineName(input);
 
   let bestScore = -1;
-  let bestName = "";
+  let bestDisplayName = "";
 
   for (const med of medicines) {
-    // normalized_generic とマッチング
-    const gScore = normalizedScore(normalized, med.normalized_generic);
+    // normalized_generic とマッチング（比較用）→ 表示は generic_name
+    const gScore = vwhtfragScore(normalized, med.normalized_generic);
     if (gScore > bestScore) {
       bestScore = gScore;
-      bestName = med.normalized_generic;
+      bestDisplayName = med.generic_name;
     }
 
-    // normalized_brand とマッチング
-    const bScore = normalizedScore(normalized, med.normalized_brand);
+    // normalized_brand とマッチング（比較用）→ 表示は brand_name
+    const bScore = vwhtfragScore(normalized, med.normalized_brand);
     if (bScore > bestScore) {
       bestScore = bScore;
-      bestName = med.normalized_brand;
+      bestDisplayName = med.brand_name;
     }
   }
 
@@ -49,7 +52,7 @@ export function findBestMatch(input: string): MatchResult {
 
   return {
     input,
-    best_match: prefix + bestName + suffix,
+    best_match: bestDisplayName,
     score,
     status: determineStatus(score),
   };
